@@ -94,35 +94,73 @@ const App = () => {
     }
   };
 
+  // Улучшенный импорт колоды
   const importDeck = (e) => {
     const file = e.target.files[0];
     if (file) {
       const reader = new FileReader();
       reader.onloadend = () => {
         try {
-          const imported = JSON.parse(reader.result);
-          const shuffledDeck = shuffleDeck(imported);
-          setDeck(shuffledDeck);
-          setScreen('game');
-          setCardIndex(0);
-          setCorrectPile([]);
-          setRepeatPile([]);
+          const importedData = JSON.parse(reader.result);
+          
+          // Поддержка старых файлов (только массив карточек)
+          if (Array.isArray(importedData)) {
+            const shuffledDeck = shuffleDeck(importedData);
+            setDeck(shuffledDeck);
+            setPreviewCards(importedData);
+            setCardBack('');
+            setTableTexture('');
+          } 
+          // Новый формат с метаданными
+          else if (importedData.cards && Array.isArray(importedData.cards)) {
+            const shuffledDeck = shuffleDeck(importedData.cards);
+            setDeck(shuffledDeck);
+            setPreviewCards(importedData.cards);
+            setCardBack(importedData.cardBack || '');
+            setTableTexture(importedData.tableTexture || '');
+          } else {
+            throw new Error('Неверный формат файла');
+          }
+          
+          setScreen('editor');
         } catch (err) {
-          alert('Ошибка импорта файла');
+          alert('Ошибка импорта файла: ' + err.message);
         }
       };
       reader.readAsText(file);
     }
   };
 
+  // Улучшенный экспорт колоды
   const exportDeck = () => {
-    const dataStr = JSON.stringify(previewCards, null, 2);
+    if (previewCards.length === 0) {
+      alert('Нет карточек для экспорта');
+      return;
+    }
+
+    const exportData = {
+      version: '1.1',
+      timestamp: new Date().toISOString(),
+      cards: previewCards,
+      cardBack: cardBack,
+      tableTexture: tableTexture,
+      metadata: {
+        totalCards: previewCards.length,
+        categories: [...new Set(previewCards.map(card => card.category))],
+        exportDate: new Date().toLocaleDateString('ru-RU')
+      }
+    };
+
+    const dataStr = JSON.stringify(exportData, null, 2);
     const dataBlob = new Blob([dataStr], {type: 'application/json'});
     const url = URL.createObjectURL(dataBlob);
     const link = document.createElement('a');
     link.href = url;
-    link.download = 'deck.json';
+    link.download = `deck-${new Date().toISOString().split('T')[0]}.json`;
+    document.body.appendChild(link);
     link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
   };
 
   // Game functions
@@ -598,6 +636,18 @@ const App = () => {
                   ))
                 )}
               </div>
+
+              {/* Информация о текущих настройках */}
+              {(cardBack || tableTexture) && (
+                <div className="mt-6 p-4 bg-neutral-700/30 rounded-lg border border-neutral-600">
+                  <h4 className="text-neutral-300 text-sm font-normal mb-2">Текущие настройки</h4>
+                  <div className="space-y-2 text-xs text-neutral-400">
+                    {cardBack && <div>✓ Рубашка карты загружена</div>}
+                    {tableTexture && <div>✓ Текстура стола загружена</div>}
+                    {!cardBack && !tableTexture && <div>Используются стандартные настройки</div>}
+                  </div>
+                </div>
+              )}
             </div>
           </div>
         </div>
